@@ -1,0 +1,137 @@
+name: Build Static PHP CLI (Workflows Compiler)
+
+on:
+  workflow_dispatch:
+    inputs:
+      php-version:
+        description: 'PHP Version to build (e.g. 8.4, 8.3, 8.2)'
+        required: false
+        default: '8.4'
+        type: string
+      extensions:
+        description: 'Comma-separated extensions list (see static-php-cli docs)'
+        required: false
+        default: 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+        type: string
+  push:
+    branches: [ main ]
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    name: Build PHP ${{ inputs.php-version || '8.4' }} (${{ matrix.os-name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            os-name: Windows x64
+            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-windows-x64.exe
+            spc-bin: spc.exe
+            artifact-name: php-8.4-windows-cli
+            output-bin: buildroot/bin/php.exe
+          - os: ubuntu-latest
+            os-name: Linux x86_64
+            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-linux-x86_64
+            spc-bin: spc
+            artifact-name: php-8.4-linux-x86_64-cli
+            output-bin: buildroot/bin/php
+          - os: macos-13
+            os-name: macOS x86_64 (Intel)
+            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-darwin-x86_64
+            spc-bin: spc
+            artifact-name: php-8.4-macos-x86_64-cli
+            output-bin: buildroot/bin/php
+          - os: macos-latest
+            os-name: macOS ARM64 (Apple Silicon)
+            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-darwin-arm64
+            spc-bin: spc
+            artifact-name: php-8.4-macos-arm64-cli
+            output-bin: buildroot/bin/php
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ============ Windows Steps ============
+      - name: Setup PHP (for tools, Windows)
+        if: runner.os == 'Windows'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+
+      - name: Download static-php-cli (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Invoke-WebRequest -Uri "${{ matrix.spc-url }}" -OutFile "${{ matrix.spc-bin }}"
+          .\${{ matrix.spc-bin }} --version
+          .\${{ matrix.spc-bin }} doctor --auto-fix
+
+      - name: Generate craft.yml (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          @"
+          php-version: ${{ inputs.php-version || '8.4' }}
+          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          sapi:
+            - cli
+          "@ > craft.yml
+          Get-Content craft.yml
+
+      - name: Build PHP CLI via craft (Windows)
+        if: runner.os == 'Windows'
+        run: .\${{ matrix.spc-bin }} craft
+
+      # ============ Unix Steps (Linux/macOS) ============
+      - name: Setup PHP (for tools, Unix)
+        if: runner.os != 'Windows'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+
+      - name: Download static-php-cli (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          curl -L "${{ matrix.spc-url }}" -o "${{ matrix.spc-bin }}"
+          chmod +x "${{ matrix.spc-bin }}"
+          ./${{ matrix.spc-bin }} --version
+          ./${{ matrix.spc-bin }} doctor --auto-fix
+
+      - name: Generate craft.yml (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cat > craft.yml << 'CRAFT_EOF'
+          php-version: ${{ inputs.php-version || '8.4' }}
+          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          sapi:
+            - cli
+          CRAFT_EOF
+          cat craft.yml
+
+      - name: Build PHP CLI via craft (Unix)
+        if: runner.os != 'Windows'
+        run: ./${{ matrix.spc-bin }} craft
+
+      # ============ Common Steps ============
+      - name: Verify Build
+        run: |
+          ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -v
+          ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -m
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.output-bin }}
+
+      - name: Upload to Release
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ matrix.output-bin }}
+          asset_name: ${{ matrix.artifact-name }}
+          tag: ${{ github.ref }}
+          overwrite: true
