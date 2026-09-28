@@ -18,6 +18,11 @@ on:
   release:
     types: [ created ]
 
+env:
+  MEMORY_LIMIT: "4G"
+  MAX_EXEC_TIME: "0"
+  TIMEZONE: "Asia/Shanghai"
+
 jobs:
   build:
     name: Build PHP ${{ inputs.php-version || '8.4' }} (${{ matrix.os-name }})
@@ -74,13 +79,9 @@ jobs:
         run: |
           @"
           php-version: ${{ inputs.php-version || '8.4' }}
-          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,oci8,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
           sapi:
             - cli
-          ini:
-            memory_limit: 8G
-            max_execution_time: 0
-            date.timezone: Asia/Shanghai
           "@ > craft.yml
           Get-Content craft.yml
 
@@ -108,13 +109,9 @@ jobs:
         run: |
           cat > craft.yml << 'CRAFT_EOF'
           php-version: ${{ inputs.php-version || '8.4' }}
-          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,oci8,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
           sapi:
             - cli
-          ini:
-            memory_limit: 4G
-            max_execution_time: 0
-            date.timezone: Asia/Shanghai
           CRAFT_EOF
           cat craft.yml
 
@@ -122,41 +119,53 @@ jobs:
         if: runner.os != 'Windows'
         run: ./${{ matrix.spc-bin }} craft
 
-      # ============ 生成外置 php.ini（备用方案） ============
-      - name: Generate php.ini (Windows)
+      # ============ 把 php.ini 放到 exe 同目录 ============
+      - name: Generate php.ini next to binary (Windows)
         if: runner.os == 'Windows'
         run: |
+          $iniDir = Split-Path "${{ matrix.output-bin }}" -Parent
           @"
-          memory_limit = 4G
-          max_execution_time = 0
-          date.timezone = Asia/Shanghai
-          "@ > php.ini
-          Get-Content php.ini
+          memory_limit = ${{ env.MEMORY_LIMIT }}
+          max_execution_time = ${{ env.MAX_EXEC_TIME }}
+          date.timezone = ${{ env.TIMEZONE }}
+          "@ | Out-File -Encoding ascii "$iniDir\php.ini"
+          Get-Content "$iniDir\php.ini"
 
-      - name: Generate php.ini (Unix)
+      - name: Generate php.ini next to binary (Unix)
         if: runner.os != 'Windows'
         run: |
-          cat > php.ini << 'INI_EOF'
-          memory_limit = 4G
-          max_execution_time = 0
-          date.timezone = Asia/Shanghai
+          iniDir=$(dirname "${{ matrix.output-bin }}")
+          cat > "$iniDir/php.ini" << INI_EOF
+          memory_limit = ${{ env.MEMORY_LIMIT }}
+          max_execution_time = ${{ env.MAX_EXEC_TIME }}
+          date.timezone = ${{ env.TIMEZONE }}
           INI_EOF
-          cat php.ini
+          cat "$iniDir/php.ini"
 
       # ============ Common Steps ============
       - name: Verify Build
         run: |
           ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -v
-          ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -m
-          ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -i
+          ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -r "echo ini_get('memory_limit'), PHP_EOL;"
 
-      - name: Upload Artifact
+      # 同时上传 exe 和它旁边的 php.ini（保持同目录结构）
+      - name: Upload Artifact (Windows)
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
           path: |
             ${{ matrix.output-bin }}
-            php.ini
+            buildroot/bin/php.ini
+
+      - name: Upload Artifact (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: |
+            ${{ matrix.output-bin }}
+            buildroot/bin/php.ini
 
       - name: Upload to Release
         if: github.event_name == 'release' && github.event.action == 'created'
