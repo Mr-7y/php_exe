@@ -79,7 +79,7 @@ jobs:
         run: |
           @"
           php-version: ${{ inputs.php-version || '8.4' }}
-          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,oci8,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
           sapi:
             - cli
           "@ > craft.yml
@@ -109,7 +109,7 @@ jobs:
         run: |
           cat > craft.yml << 'CRAFT_EOF'
           php-version: ${{ inputs.php-version || '8.4' }}
-          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,oci8,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
           sapi:
             - cli
           CRAFT_EOF
