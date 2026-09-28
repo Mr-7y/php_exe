@@ -77,6 +77,10 @@ jobs:
           extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
           sapi:
             - cli
+          ini:
+            memory_limit: 4G
+            max_execution_time: 0
+            date.timezone: Asia/Shanghai
           "@ > craft.yml
           Get-Content craft.yml
 
@@ -107,6 +111,10 @@ jobs:
           extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
           sapi:
             - cli
+          ini:
+            memory_limit: 4G
+            max_execution_time: 0
+            date.timezone: Asia/Shanghai
           CRAFT_EOF
           cat craft.yml
 
@@ -114,17 +122,41 @@ jobs:
         if: runner.os != 'Windows'
         run: ./${{ matrix.spc-bin }} craft
 
+      # ============ 生成外置 php.ini（备用方案） ============
+      - name: Generate php.ini (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          @"
+          memory_limit = 4G
+          max_execution_time = 0
+          date.timezone = Asia/Shanghai
+          "@ > php.ini
+          Get-Content php.ini
+
+      - name: Generate php.ini (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cat > php.ini << 'INI_EOF'
+          memory_limit = 4G
+          max_execution_time = 0
+          date.timezone = Asia/Shanghai
+          INI_EOF
+          cat php.ini
+
       # ============ Common Steps ============
       - name: Verify Build
         run: |
           ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -v
           ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -m
+          ${{ (runner.os == 'Windows' && '.\' || './') }}${{ matrix.output-bin }} -i
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: ${{ matrix.output-bin }}
+          path: |
+            ${{ matrix.output-bin }}
+            php.ini
 
       - name: Upload to Release
         if: github.event_name == 'release' && github.event.action == 'created'
