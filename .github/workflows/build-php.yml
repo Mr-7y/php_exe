@@ -143,6 +143,7 @@ jobs:
               - "ext-simdjson:https://pecl.php.net/get/simdjson-4.0.0.tgz"
               - "ext-sqlsrv:https://pecl.php.net/get/sqlsrv-5.13.3.tgz"
               - "ext-pdo_sqlsrv:https://pecl.php.net/get/pdo_sqlsrv-5.13.3.tgz"
+              - "php-src:https://www.php.net/distributions/php-8.4.27.tar.xz"
           "@ > craft.yml
           Get-Content craft.yml
 
@@ -172,9 +173,21 @@ jobs:
         with:
           php-version: 8.2
 
-      - name: Install pkg-config (macOS)
-        if: runner.os == 'macOS'
-        run: brew install pkg-config
+      - name: Provide pkg-config (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p buildroot/bin
+          if ! command -v pkg-config >/dev/null 2>&1; then
+            if [ "$RUNNER_OS" = "macOS" ]; then
+              brew install pkg-config
+            else
+              sudo apt-get update && sudo apt-get install -y pkg-config
+            fi
+          fi
+          # spc 只认 PKG_ROOT_PATH 或 BUILD_BIN_PATH 下的 pkg-config，
+          # 这里把系统已安装的版本链接过去，避免 doctor 走 GitHub API 下载二进制
+          ln -sf "$(command -v pkg-config)" buildroot/bin/pkg-config
+          buildroot/bin/pkg-config --version
 
       - name: Download static-php-cli (Unix)
         if: runner.os != 'Windows'
@@ -247,6 +260,7 @@ jobs:
               - "ext-simdjson:https://pecl.php.net/get/simdjson-4.0.0.tgz"
               - "ext-sqlsrv:https://pecl.php.net/get/sqlsrv-5.13.3.tgz"
               - "ext-pdo_sqlsrv:https://pecl.php.net/get/pdo_sqlsrv-5.13.3.tgz"
+              - "php-src:https://www.php.net/distributions/php-8.4.27.tar.xz"
           CRAFT_EOF
           cat craft.yml
 
