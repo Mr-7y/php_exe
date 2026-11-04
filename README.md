@@ -82,7 +82,7 @@ php_exe 是一个基于 **[static-php-cli](https://static-php.dev/)** 的**静�
 | 参数名 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
 | `php-version` | string | `8.4` | 要编译的 PHP 版本。支持：`8.4`、`8.3`、`8.2`、`8.1`（建议 8.2+） |
-| `extensions` | string | 留空（= 内置全量列表，见 3.3） | 用**英文逗号**分隔的扩展名称列表，不要加空格。**留空**时按平台自动使用内置全量列表；**填写**时完全覆盖内置列表 |
+| `extensions` | string | 留空（= 内置列表，见 3.3） | 用**英文逗号**分隔的扩展名称列表，不要加空格。**留空**时三平台统一使用内置列表；**填写**时完全覆盖内置列表 |
 
 ---
 
@@ -135,7 +135,7 @@ sapi:
 
 ### 3.1 最简单的做法：触发工作流时改 extensions 参数
 
-在 **Run workflow** 弹窗的 **Comma-separated extensions list** 输入框里，直接粘贴你想要的扩展列表，用英文逗号分隔，**不要有空格**。留空则使用 3.3 的内置全量列表；填写则完全覆盖内置列表。例如你只想用工作流精简版：
+在 **Run workflow** 弹窗的 **Comma-separated extensions list** 输入框里，直接粘贴你想要的扩展列表，用英文逗号分隔，**不要有空格**。留空则使用 3.3 的内置列表；填写则完全覆盖内置列表。例如你只想用工作流精简版：
 
 ```
 bcmath,ctype,dom,fileinfo,filter,json,mbstring,openssl,pdo,pdo_sqlite,phar,simplexml,sockets,sqlite3,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
