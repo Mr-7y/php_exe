@@ -144,6 +144,7 @@ jobs:
               - "ext-sqlsrv:https://pecl.php.net/get/sqlsrv-5.13.3.tgz"
               - "ext-pdo_sqlsrv:https://pecl.php.net/get/pdo_sqlsrv-5.13.3.tgz"
               - "php-src:https://www.php.net/distributions/php-8.4.27.tar.xz"
+              - "libxslt:https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.45.tar.xz"
           "@ > craft.yml
           Get-Content craft.yml
 
@@ -261,6 +262,7 @@ jobs:
               - "ext-sqlsrv:https://pecl.php.net/get/sqlsrv-5.13.3.tgz"
               - "ext-pdo_sqlsrv:https://pecl.php.net/get/pdo_sqlsrv-5.13.3.tgz"
               - "php-src:https://www.php.net/distributions/php-8.4.27.tar.xz"
+              - "libxslt:https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.45.tar.xz"
           CRAFT_EOF
           cat craft.yml
 
