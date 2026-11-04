@@ -33,9 +33,6 @@ jobs:
   build:
     name: Build PHP ${{ inputs.php-version || '8.4' }} (${{ matrix.os-name }})
     runs-on: ${{ matrix.os }}
-    env:
-      # 给 spc 使用，避免 GitHub API 匿名限流导致依赖下载失败
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
