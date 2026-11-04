@@ -9,9 +9,9 @@ on:
         default: '8.4'
         type: string
       extensions:
-        description: 'Comma-separated extensions list (see static-php-cli docs)'
+        description: 'Comma-separated extensions list (leave empty to use the built-in per-platform list, see static-php-cli docs)'
         required: false
-        default: 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib'
+        default: ''
         type: string
   push:
     branches: [ main ]
@@ -22,6 +22,12 @@ env:
   MEMORY_LIMIT: "4G"
   MAX_EXEC_TIME: "0"
   TIMEZONE: "Asia/Shanghai"
+  # 三平台（Linux / macOS / Windows）均支持的扩展，含 ODBC / PDO_ODBC / 各种数据库驱动
+  COMMON_EXTENSIONS: "amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_pgsql,pdo_sqlite,pdo_sqlsrv,pgsql,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd"
+  # 仅 Linux / macOS 支持（Windows 编译这些会直接报错）
+  UNIX_EXTRA_EXTENSIONS: "pcntl,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid"
+  # 仅 Linux 支持
+  LINUX_EXTRA_EXTENSIONS: "inotify"
 
 jobs:
   build:
@@ -77,9 +83,11 @@ jobs:
       - name: Generate craft.yml (Windows)
         if: runner.os == 'Windows'
         run: |
+          $ext = "${{ inputs.extensions }}"
+          if ([string]::IsNullOrWhiteSpace($ext)) { $ext = $env:COMMON_EXTENSIONS }
           @"
           php-version: ${{ inputs.php-version || '8.4' }}
-          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          extensions: $ext
           sapi:
             - cli
           "@ > craft.yml
@@ -107,9 +115,16 @@ jobs:
       - name: Generate craft.yml (Unix)
         if: runner.os != 'Windows'
         run: |
-          cat > craft.yml << 'CRAFT_EOF'
+          EXT="${{ inputs.extensions }}"
+          if [ -z "$EXT" ]; then
+            EXT="${COMMON_EXTENSIONS},${UNIX_EXTRA_EXTENSIONS}"
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              EXT="${EXT},${LINUX_EXTRA_EXTENSIONS}"
+            fi
+          fi
+          cat > craft.yml << CRAFT_EOF
           php-version: ${{ inputs.php-version || '8.4' }}
-          extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+          extensions: ${EXT}
           sapi:
             - cli
           CRAFT_EOF

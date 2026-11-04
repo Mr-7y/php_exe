@@ -9,8 +9,8 @@ php_exe 是一个基于 **[static-php-cli](https://static-php.dev/)** 的**静�
 ## 核心特性
 
 - **完全静态编译**：所有依赖库（libc、libxml、openssl、zlib、mbstring 等）均静态链接，单个二进制文件即可运行
-- **零依赖部署**：目标机器无需预装 PHP 及任何扩展库，拷贝即用
-- **工作流专用**：针对工作流引擎的编译执行场景进行了优化，内置常用工作流处理扩展
+- **零依赖部署**：目标机器无需预装 PHP 及任何扩展库，拷贝即用（ODBC 除外，需目标机安装对应数据库驱动，见 3.6）
+- **工作流专用**：针对工作流引擎的编译执行场景进行了优化，内置常用工作流处理扩展（含 ODBC / SQL Server / PostgreSQL / MySQL / SQLite 数据库驱动）
 - **多平台自动构建**：通过 GitHub Actions 一次触发，同时生成 Linux x86_64 / Windows x64 / macOS x86_64 & ARM64 四个平台产物
 - **参数化版本与扩展**：运行工作流时可自定义 PHP 版本和扩展列表，改完就跑，跑完就下
 - **轻量级体积**：通过裁剪无用模块和 UPX 压缩，保持二进制体积最小化
@@ -74,7 +74,7 @@ php_exe 是一个基于 **[static-php-cli](https://static-php.dev/)** 的**静�
 2. 左侧选择 **Build Static PHP CLI (Workflows Compiler)** 这个工作流
 3. 点击右侧的 **Run workflow** 下拉按钮（蓝色）
 4. 填写参数后点击 **Run workflow** 绿色按钮
-5. 等待 5~15 分钟（取决于扩展数量和平台），Job 全部变绿后进入该次 Run 页面
+5. 等待 10~30 分钟（扩展越多越久），Job 全部变绿后进入该次 Run 页面
 6. 滚到最下方 **Artifacts** 区域，点击下载对应平台的 zip 包即可得到 `php.exe` 或 `php`
 
 **可填写的参数**：
@@ -82,7 +82,7 @@ php_exe 是一个基于 **[static-php-cli](https://static-php.dev/)** 的**静�
 | 参数名 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
 | `php-version` | string | `8.4` | 要编译的 PHP 版本。支持：`8.4`、`8.3`、`8.2`、`8.1`（建议 8.2+） |
-| `extensions` | string | （工作流默认列表，见第 2 节） | 用**英文逗号**分隔的扩展名称列表，不要加空格。需要什么扩展就加什么，详见第 3 节 |
+| `extensions` | string | 留空（= 内置全量列表，见 3.3） | 用**英文逗号**分隔的扩展名称列表，不要加空格。**留空**时按平台自动使用内置全量列表；**填写**时完全覆盖内置列表 |
 
 ---
 
@@ -135,7 +135,7 @@ sapi:
 
 ### 3.1 最简单的做法：触发工作流时改 extensions 参数
 
-在 **Run workflow** 弹窗的 **Comma-separated extensions list** 输入框里，直接粘贴你想要的扩展列表，用英文逗号分隔，**不要有空格**。例如你只想用工作流精简版：
+在 **Run workflow** 弹窗的 **Comma-separated extensions list** 输入框里，直接粘贴你想要的扩展列表，用英文逗号分隔，**不要有空格**。留空则使用 3.3 的内置全量列表；填写则完全覆盖内置列表。例如你只想用工作流精简版：
 
 ```
 bcmath,ctype,dom,fileinfo,filter,json,mbstring,openssl,pdo,pdo_sqlite,phar,simplexml,sockets,sqlite3,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
@@ -149,57 +149,93 @@ amqp,apcu,bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,ffi,fileinfo,filter,ftp
 
 ### 3.2 改工作流默认扩展列表（长期固定）
 
-编辑 [.github/workflows/build-php.yml](.github/workflows/build-php.yml)，搜索 `inputs.extensions ||`，后面引号里的内容就是默认扩展：
+默认列表不再写死在每一步里，而是集中放在 [.github/workflows/build-php.yml](.github/workflows/build-php.yml) 顶部的 `env:` 段：
 
 ```yaml
-# Windows 那段
-extensions: ${{ inputs.extensions || 'bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib' }}
+env:
+  # 三平台（Linux / macOS / Windows）通用，含 odbc / pdo_odbc / 各类数据库驱动
+  COMMON_EXTENSIONS: "amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_pgsql,pdo_sqlite,pdo_sqlsrv,pgsql,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd"
+  # 仅 Linux / macOS 自动追加（Windows 编译这些会报错）
+  UNIX_EXTRA_EXTENSIONS: "pcntl,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid"
+  # 仅 Linux 自动追加
+  LINUX_EXTRA_EXTENSIONS: "inotify"
 ```
 
-改成你想要的即可，同理 Unix 那段也要同步改。
+> 为什么要按平台拆开：`pcntl`、`posix`、`imap`、`ldap`、`memcached`、`snmp`、`uuid`、`inotify` 等在 Windows 上不受 static-php-cli 支持，放进通用列表会让 Windows Job 直接失败。
 
-### 3.3 工作流编译推荐扩展清单
+### 3.3 内置全量扩展清单（默认，含 ODBC）
 
-以下扩展是专为**工作流编译执行**场景精选的默认列表，兼顾体积和功能：
+`extensions` 参数留空时，工作流会按平台自动拼接以下三组列表（Linux 共 77 个，Windows 67 个）：
+
+**三平台通用（COMMON_EXTENSIONS）**
 
 ```
-bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,libxml,mbregex,mbstring,mysqli,mysqlnd,opcache,openssl,pdo,pdo_mysql,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
+amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_pgsql,pdo_sqlite,pdo_sqlsrv,pgsql,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd
+```
+
+**仅 Linux / macOS（UNIX_EXTRA_EXTENSIONS）**
+
+```
+pcntl,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid
+```
+
+**仅 Linux（LINUX_EXTRA_EXTENSIONS）**
+
+```
+inotify
 ```
 
 | 分类 | 扩展 | 说明（工作流场景用途） |
 |------|------|------------------------|
 | **核心必备** | Core, date, filter, pcre, SPL, tokenizer | PHP 默认自带，不可移除 |
-| **字符串/编码** | ctype, mbstring, mbregex, iconv | 多字节字符串处理（工作流脚本国际化） |
-| **JSON/XML** | json, dom, libxml, SimpleXML, xml, xmlreader, xmlwriter | 工作流定义文件（JSON/XML）读写解析 |
-| **数据/时间** | bcmath, calendar | 工作流数值计算、日期调度 |
-| **数据库/持久化** | pdo, pdo_mysql, pdo_sqlite, mysqli, mysqlnd, sqlite3 | 工作流状态存储、连接业务数据库 |
-| **文件/归档** | fileinfo, phar, zip, zlib, bz2 | 工作流包（Phar/ZIP）打包解包、状态压缩 |
-| **网络/IO** | curl, ftp, sockets, ssh2 | 工作流远程调用、回调通知、SFTP 上传下载 |
-| **缓存/消息队列** | redis, apcu, yac, amqp | 工作流缓存、分布式锁、消息队列驱动 |
-| **安全/加密** | openssl, sodium | 工作流签名校验、加密传输 |
-| **性能** | opcache, simdjson | 工作流脚本加速编译执行 |
-| **Web/服务** | swow | 可构建长驻工作流服务（协程） |
-| **图像处理** | gd, exif | 工作流中的图片生成、缩略图 |
-| **其他** | dba, ds, ffi, shmop, soap, sysvshm, session | 按需启用 |
+| **字符串/编码** | ctype, mbstring, mbregex, iconv, gettext, intl | 多字节字符串、国际化 |
+| **JSON/XML** | dom, libxml, simplexml, xml, xmlreader, xmlwriter, xsl | 工作流定义文件读写、XSLT 转换 |
+| **数据/时间** | bcmath, gmp, calendar | 数值计算（bcmath/gmp 大数）、日期调度 |
+| **数据库/持久化** | pdo, pdo_mysql, mysqli, mysqlnd, pdo_sqlite, sqlite3, pdo_pgsql, pgsql, odbc, pdo_odbc, sqlsrv, pdo_sqlsrv | MySQL / SQLite / PostgreSQL / 通用 ODBC / SQL Server |
+| **缓存/消息队列** | redis, apcu, memcached(Unix), amqp, mongodb, msgpack, igbinary | 缓存、分布式锁、消息队列、序列化 |
+| **文件/归档/压缩** | fileinfo, phar, zip, zlib, bz2, xz, zstd, lz4, brotli, rar | 工作流包打包解包、状态压缩 |
+| **网络/IO** | curl, ftp, sockets, ssh2, soap, readline, maxminddb | 远程调用、SFTP、SOAP、GeoIP |
+| **图像处理** | gd, exif | 图片生成、缩略图、EXIF 读取 |
+| **安全/加密** | openssl, sodium | 签名校验、加密传输 |
+| **性能** | opcache, simdjson | 脚本加速编译执行、高性能 JSON |
+| **协程/服务** | swow | 长驻工作流服务（协程） |
+| **系统/CLI** | pcntl(Unix), posix(Unix), sysvmsg(Unix), sysvsem(Unix), sysvshm, shmop, inotify(Linux), session | 进程管理、信号、共享内存、文件监听 |
+| **其他** | dba, ds, tidy, yaml, uuid(Unix), ldap(Unix), imap(Unix), snmp(Unix) | 按需启用 |
 
 ### 3.4 完整可用扩展速查表（static-php-cli 支持的全部扩展）
 
-以下是 static-php-cli 最新支持的全部扩展清单，需要什么直接把名字复制到 `extensions` 列表里即可（名称全部小写，逗号分隔）：
+以 [static-php-cli 官方 Supported Extensions](https://static-php.dev/en/guide/extensions.html) 为准（v3 当前列表，名称全部小写、逗号分隔）：
+
+**Linux / macOS / Windows 三平台均支持**
 
 ```
-amqp, apcu, bcmath, bz2, calendar, ctype, curl, dba, dom, ds, exif,
-ffi, fileinfo, filter, ftp, gd, gettext, gmp, iconv, igbinary, imagick,
-imap, intl, json, ldap, libxml, mbstring,mbregex, mcrypt, memcached,
-mongodb, mysqli, mysqlnd, opcache, openssl, pcntl, pdo, pdo_dblib,
-pdo_firebird, pdo_mysql, pdo_oci, pdo_odbc, pdo_pgsql, pdo_sqlite,
-pdo_sqlsrv, pgsql, phar, posix, protobuf, rar, readline, redis,
-session, shmop, simdjson, simplexml, snmp, soap, sockets, sodium,
-solr, sqlite3, sqlsrv, ssh2, swoole, swow, sysvmsg, sysvsem, sysvshm,
-tidy, tokenizer, uuid, xdebug, xml, xmlreader, xmlrpc, xmlwriter,
-xsl, yac, yaml, zip, zlib
+amqp,apcu,ast,bcmath,brotli,bz2,calendar,ctype,curl,dba,decimal,deepclone,dio,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,gmssl,iconv,igbinary,imagick,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,mysqlnd_ed25519,mysqlnd_parsec,odbc,opcache,openssl,opentelemetry,pcov,pdo,pdo_mysql,pdo_odbc,pdo_pgsql,pdo_sqlite,pdo_sqlsrv,pgsql,phar,rar,readline,redis,session,shmop,simdjson,simplexml,snappy,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,trader,uv,xlswriter,xml,xmlreader,xmlwriter,xsl,xz,yac,yaml,zip,zlib,zstd
 ```
 
-> **提示**：不是所有扩展在所有平台都能用。遇到 `extension xxx is not supported on xxx OS` 报错时，把那个扩展从列表里移除即可。Windows 下 `swoole` 不支持，Linux/macOS 下 `pdo_sqlsrv`/`sqlsrv` 经常需要额外配。
+**仅 Linux / macOS 支持**
+
+```
+clickhouse,event,excimer,fastchart,fastjson,grpc,http,imap,ldap,memcache,memcached,password-argon2,pcntl,posix,protobuf,raphf,rdkafka,snmp,swoole,swoole-hook-mysql,swoole-hook-odbc,swoole-hook-pgsql,swoole-hook-sqlite,spx,sysvmsg,sysvsem,uuid,xhprof
+```
+
+**仅 Linux 支持**
+
+```
+inotify
+```
+
+**仅 Windows 支持**
+
+```
+com_dotnet
+```
+
+> **提示**：
+> - 遇到 `extension xxx is not supported on xxx OS` 报错，说明该扩展在当前平台不可用，从列表里移除即可。
+> - `ffi` 在 Linux 默认的 musl 全静态目标下无法加载动态库，需改用 glibc 目标（如 `SPC_TARGET=native-native-gnu.2.17`）。
+> - `parallel` 仅支持 ZTS 构建，本工作流是 NTS，不要添加。
+> - `xdebug` 只能以共享扩展方式编译，不在本静态清单中。
+> - `oci8` / `mcrypt` / `pdo_oci` 等不受 static-php-cli 支持，加了会失败。
 
 ### 3.5 添加自定义扩展的三种模式
 
@@ -232,6 +268,42 @@ Invoke-WebRequest -Uri "https://dl.static-php.dev/v3/spc-bin/nightly/spc-windows
 .\spc.exe build "bcmath,ctype,json,mbstring,openssl,phar,zip,zlib" --build-cli
 .\buildroot\bin\php.exe -v
 ```
+
+### 3.6 ODBC / 数据库扩展的运行前提（重要）
+
+`odbc`、`pdo_odbc` 已经静态编进二进制，`php -m` 里能看到；但 **ODBC 驱动本身不会被打包**，目标机器仍要安装并注册对应的数据库驱动：
+
+| 目标数据库 | 需要安装的驱动 |
+|------------|----------------|
+| SQL Server | Microsoft ODBC Driver 18 for SQL Server |
+| MySQL / MariaDB | MySQL Connector/ODBC 或 MariaDB Connector/ODBC |
+| PostgreSQL | psqlODBC |
+| Oracle | Oracle Instant Client + ODBC 驱动（`oci8` 本身无法静态编译，只能用 ODBC 方式） |
+
+- **Windows**：驱动由系统 ODBC 管理器（`odbc32.dll`）加载，在“ODBC 数据源管理器 → 驱动程序”里确认已注册即可。
+- **Linux / macOS**：驱动管理器（unixODBC）已编进二进制，但驱动 `.so` 需要安装并在 `/etc/odbcinst.ini`（或 `~/.odbcinst.ini`）里注册，可用 `odbcinst -q -d` 查看。
+- **Linux 全静态（默认 musl）注意**：全静态二进制无法 `dlopen` 动态库，unixODBC 会加载驱动失败。若要在 Linux 上真正连接数据库，需要改用 glibc 目标（例如设置环境变量 `SPC_TARGET=native-native-gnu.2.17`），或设置 `SPC_MUSL_DYNAMIC=true` 让 libc 动态链接。仅验证 `php -m` 是否有扩展则不受影响。
+
+PDO 连接示例：
+
+```php
+<?php
+// SQL Server（ODBC Driver 18）
+$pdo = new PDO(
+    'odbc:Driver={ODBC Driver 18 for SQL Server};Server=host,1433;Database=db;TrustServerCertificate=yes',
+    'user',
+    'password'
+);
+
+// MySQL ODBC
+$pdo = new PDO(
+    'odbc:Driver={MySQL ODBC 8.0 Unicode Driver};Server=host;Database=db',
+    'user',
+    'password'
+);
+```
+
+排查顺序：`php -m | grep -i odbc` → 确认系统驱动已安装 → `odbcinst -q -d` 确认已注册 → 再试连接。
 
 ---
 
