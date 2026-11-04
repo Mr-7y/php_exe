@@ -153,6 +153,14 @@ jobs:
             .\${{ matrix.spc-bin }} craft
             if ($LASTEXITCODE -eq 0) { exit 0 }
             Write-Host "craft failed (attempt $i/3), retry in 60s..."
+            if (Test-Path log\spc.output.log) {
+              Write-Host "===== spc.output.log (tail 400) ====="
+              Get-Content log\spc.output.log -Tail 400
+            }
+            if (Test-Path log\spc.shell.log) {
+              Write-Host "===== spc.shell.log (tail 400) ====="
+              Get-Content log\spc.shell.log -Tail 400
+            }
             Start-Sleep -Seconds 60
           }
           exit 1
