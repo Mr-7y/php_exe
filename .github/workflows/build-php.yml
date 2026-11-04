@@ -90,6 +90,8 @@ jobs:
         run: |
           $ext = "${{ inputs.extensions }}"
           if ([string]::IsNullOrWhiteSpace($ext)) { $ext = $env:COMMON_EXTENSIONS }
+          # 上一阶段准备的、打过 Makefile 补丁的 PHP 源码目录（绝对路径，YAML 里用正斜杠）
+          $phpSrcLocal = ((Join-Path $PWD 'php-src-local') -replace '\\', '/')
           @"
           php-version: ${{ inputs.php-version || '8.4' }}
           extensions: $ext
@@ -145,46 +147,74 @@ jobs:
               - "ext-pdo_sqlsrv:https://pecl.php.net/get/pdo_sqlsrv-5.13.3.tgz"
               - "php-src:https://www.php.net/distributions/php-8.4.27.tar.xz"
               - "libxslt:https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.45.tar.xz"
+            # 使用本地上一步准备好的补丁源码（custom-local 优先级高于 custom-url）
+            custom-local:
+              - "php-src:$phpSrcLocal"
           "@ > craft.yml
           Get-Content craft.yml
+
+      - name: Prepare patched PHP source (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # 扩展较多时，PHP 的 win32 Makefile 里 BUILD_DIRS_SUB 列表很长，
+          # `nmake clean` 和 build_dirs 的单行命令会超过 cmd 的 8191 字符上限，
+          # 报 NMAKE fatal error U1095。
+          # 这里自己下载 PHP 源码，把这两条超长命令改成调用 builddirs.bat
+          # （bat 从生成的 Makefile 里读取目录列表，单条命令就不会超长），
+          # 再由 craft.yml 的 custom-local 指向这份打过补丁的源码。
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $tarball = Join-Path $PWD 'php-8.4.27.tar.xz'
+          if (-not (Test-Path $tarball)) {
+            Invoke-WebRequest -Uri 'https://www.php.net/distributions/php-8.4.27.tar.xz' -OutFile $tarball
+          }
+          $dest = Join-Path $PWD 'php-src-local'
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          tar -xf $tarball -C $dest --strip-components 1
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to extract PHP source tarball' }
+
+          $makefile = Join-Path $dest 'win32\build\Makefile'
+          $lines = [System.IO.File]::ReadAllLines($makefile)
+          $patched = 0
+          for ($i = 0; $i -lt $lines.Length; $i++) {
+            if ($lines[$i].Contains('for %D in ($(BUILD_DIRS_SUB))')) {
+              $lines[$i] = "`t@call `"`$(PHP_SRC_DIR)\win32\build\builddirs.bat`" mkdir `"`$(BUILD_DIR)`""
+              $patched++
+            } elseif ($lines[$i].Contains('for %D in (_x $(BUILD_DIRS_SUB))') -and $lines[$i].Contains('del /F /Q')) {
+              $lines[$i] = "`t@call `"`$(PHP_SRC_DIR)\win32\build\builddirs.bat`" clean `"`$(BUILD_DIR)`""
+              $patched++
+            }
+          }
+          if ($patched -lt 2) { throw "Unexpected PHP Makefile template (patched $patched lines)" }
+          [System.IO.File]::WriteAllLines($makefile, $lines, [System.Text.Encoding]::ASCII)
+
+          $bat = @'
+          @echo off
+          setlocal EnableExtensions EnableDelayedExpansion
+          set "ACTION=%~1"
+          set "BUILD_DIR=%~2"
+          cd /d "%~dp0..\.."
+          set "DIRS="
+          for /F "tokens=1,* delims==" %%A in ('findstr /b /c:"BUILD_DIRS_SUB=" Makefile') do set "DIRS=%%B"
+          cd /d "%BUILD_DIR%"
+          if not defined DIRS exit /b 0
+          if /I "%ACTION%"=="clean" (
+            for %%D in (!DIRS!) do @if exist "%%D" @del /F /Q "%%D\*.*" > NUL
+          ) else (
+            for %%D in (!DIRS!) do @if not exist "%%D" @mkdir "%%D" > NUL
+          )
+          exit /b 0
+          '@
+          [System.IO.File]::WriteAllText((Join-Path $dest 'win32\build\builddirs.bat'), $bat + "`r`n", [System.Text.Encoding]::ASCII)
+
+          Select-String -Path $makefile -Pattern 'builddirs.bat' | ForEach-Object { $_.Line.Trim() }
 
       - name: Build PHP CLI via craft (Windows)
         if: runner.os == 'Windows'
         run: |
-          # 扩展较多时 PHP 生成的 Makefile 里 BUILD_DIRS_SUB 超长，
-          # `nmake clean` 会报 U1095（命令行超过 Windows 8191 字符上限）。
-          # 全新源码树本来也不需要 clean，这里用垫片让 clean 失败不阻断构建。
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $nmake = $null
-          if (Test-Path $vswhere) {
-            $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-            if ($vsPath) {
-              $nmake = Get-ChildItem -Path (Join-Path $vsPath 'VC\Tools\MSVC') -Recurse -Filter nmake.exe -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -match 'Hostx64\\x64' } |
-                Select-Object -First 1 -ExpandProperty FullName
-            }
-          }
-          if (-not $nmake) {
-            $nmake = where.exe nmake 2>$null | Select-Object -First 1
-          }
-          if ($nmake) {
-            Write-Host "nmake found: $nmake"
-            $shim = Join-Path $PWD 'nmake-shim'
-            New-Item -ItemType Directory -Force -Path $shim | Out-Null
-            @"
-          @echo off
-          if "%~1"=="clean" (
-            "$nmake" %*
-            exit /b 0
-          )
-          "$nmake" %*
-          exit /b %ERRORLEVEL%
-          "@ | Out-File -Encoding ascii (Join-Path $shim 'nmake.bat')
-            $env:PATH = "$shim;$env:PATH"
-          } else {
-            Write-Host "nmake not found, skip the clean shim"
-          }
-
+          # Makefile 的超长命令已在“Prepare patched PHP source (Windows)”中修补，
+          # 这里只执行 craft，并在失败时重试 3 次、输出 spc 日志方便定位。
           for ($i = 1; $i -le 3; $i++) {
             .\${{ matrix.spc-bin }} craft
             if ($LASTEXITCODE -eq 0) { exit 0 }
