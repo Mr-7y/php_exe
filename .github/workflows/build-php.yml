@@ -33,6 +33,11 @@ jobs:
   build:
     name: Build PHP ${{ inputs.php-version || '8.4' }} (${{ matrix.os-name }})
     runs-on: ${{ matrix.os }}
+    env:
+      # 可选：在仓库 Secrets 添加 SPC_GITHUB_TOKEN（可读公开仓库的 PAT），
+      # 避免 spc 下载依赖时被 GitHub API 匿名限流。不要用 secrets.GITHUB_TOKEN，
+      # 它只能访问当前仓库，访问其他仓库会 404。
+      GITHUB_TOKEN: ${{ secrets.SPC_GITHUB_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +104,14 @@ jobs:
 
       - name: Build PHP CLI via craft (Windows)
         if: runner.os == 'Windows'
-        run: .\${{ matrix.spc-bin }} craft
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            .\${{ matrix.spc-bin }} craft
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Write-Host "craft failed (attempt $i/3), retry in 60s..."
+            Start-Sleep -Seconds 60
+          }
+          exit 1
 
       # ============ Unix Steps (Linux/macOS) ============
       - name: Setup PHP (for tools, Unix)
@@ -140,7 +152,13 @@ jobs:
 
       - name: Build PHP CLI via craft (Unix)
         if: runner.os != 'Windows'
-        run: ./${{ matrix.spc-bin }} craft
+        run: |
+          for i in 1 2 3; do
+            ./${{ matrix.spc-bin }} craft && exit 0
+            echo "craft failed (attempt $i/3), retry in 60s..."
+            sleep 60
+          done
+          exit 1
 
       # ============ 把 php.ini 放到 exe 同目录 ============
       - name: Generate php.ini next to binary (Windows)

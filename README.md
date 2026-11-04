@@ -203,6 +203,8 @@ inotify
 | **其他** | dba, ds, tidy, yaml, uuid(Unix), ldap(Unix), imap(Unix), snmp(Unix) | 按需启用 |
 
 > Windows 版默认不含 `pgsql`/`pdo_pgsql`（编译需临时拉取 Python/meson，CI 会因 nuget 失败）。Windows 要连 PostgreSQL，可安装 psqlODBC 后走 `odbc`/`pdo_odbc`。
+>
+> 如果构建在下载阶段报 `Failed to get GitHub release API info` / `Failed to get GitHub latest release`，说明 spc 请求 GitHub API 被限流。在仓库 `Settings → Secrets and variables → Actions` 添加名为 `SPC_GITHUB_TOKEN` 的 classic PAT（勾选 `public_repo` 即可），工作流会自动使用它。**不要用内置 `GITHUB_TOKEN`**：它只能访问当前仓库，访问其他仓库会返回 404。
 
 ### 3.4 完整可用扩展速查表（static-php-cli 支持的全部扩展）
 
