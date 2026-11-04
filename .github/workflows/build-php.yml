@@ -51,13 +51,13 @@ jobs:
             output-bin: buildroot/bin/php
           - os: macos-13
             os-name: macOS x86_64 (Intel)
-            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-darwin-x86_64
+            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-macos-x86_64
             spc-bin: spc
             artifact-name: php-8.4-macos-x86_64-cli
             output-bin: buildroot/bin/php
           - os: macos-latest
             os-name: macOS ARM64 (Apple Silicon)
-            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-darwin-arm64
+            spc-url: https://dl.static-php.dev/v3/spc-bin/nightly/spc-macos-aarch64
             spc-bin: spc
             artifact-name: php-8.4-macos-arm64-cli
             output-bin: buildroot/bin/php
