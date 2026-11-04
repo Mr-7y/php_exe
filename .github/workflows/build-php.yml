@@ -154,10 +154,24 @@ jobs:
           # 扩展较多时 PHP 生成的 Makefile 里 BUILD_DIRS_SUB 超长，
           # `nmake clean` 会报 U1095（命令行超过 Windows 8191 字符上限）。
           # 全新源码树本来也不需要 clean，这里用垫片让 clean 失败不阻断构建。
-          $nmake = (Get-Command nmake.exe -CommandType Application | Select-Object -First 1).Source
-          $shim = Join-Path $PWD 'nmake-shim'
-          New-Item -ItemType Directory -Force -Path $shim | Out-Null
-          @"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $nmake = $null
+          if (Test-Path $vswhere) {
+            $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            if ($vsPath) {
+              $nmake = Get-ChildItem -Path (Join-Path $vsPath 'VC\Tools\MSVC') -Recurse -Filter nmake.exe -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -match 'Hostx64\\x64' } |
+                Select-Object -First 1 -ExpandProperty FullName
+            }
+          }
+          if (-not $nmake) {
+            $nmake = where.exe nmake 2>$null | Select-Object -First 1
+          }
+          if ($nmake) {
+            Write-Host "nmake found: $nmake"
+            $shim = Join-Path $PWD 'nmake-shim'
+            New-Item -ItemType Directory -Force -Path $shim | Out-Null
+            @"
           @echo off
           if "%~1"=="clean" (
             "$nmake" %*
@@ -166,7 +180,10 @@ jobs:
           "$nmake" %*
           exit /b %ERRORLEVEL%
           "@ | Out-File -Encoding ascii (Join-Path $shim 'nmake.bat')
-          $env:PATH = "$shim;$env:PATH"
+            $env:PATH = "$shim;$env:PATH"
+          } else {
+            Write-Host "nmake not found, skip the clean shim"
+          }
 
           for ($i = 1; $i -le 3; $i++) {
             .\${{ matrix.spc-bin }} craft
