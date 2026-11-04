@@ -90,6 +90,10 @@ jobs:
           extensions: $ext
           sapi:
             - cli
+          download-options:
+            parallel: 10
+            retry: 5
+            prefer-binary: true
           "@ > craft.yml
           Get-Content craft.yml
 
@@ -127,6 +131,10 @@ jobs:
           extensions: ${EXT}
           sapi:
             - cli
+          download-options:
+            parallel: 10
+            retry: 5
+            prefer-binary: true
           CRAFT_EOF
           cat craft.yml
 
