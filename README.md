@@ -154,29 +154,29 @@ amqp,apcu,bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,ffi,fileinfo,filter,ftp
 ```yaml
 env:
   # 三平台（Linux / macOS / Windows）通用，含 odbc / pdo_odbc / 各类数据库驱动
-  COMMON_EXTENSIONS: "amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_pgsql,pdo_sqlite,pdo_sqlsrv,pgsql,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd"
-  # 仅 Linux / macOS 自动追加（Windows 编译这些会报错）
-  UNIX_EXTRA_EXTENSIONS: "pcntl,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid"
+  COMMON_EXTENSIONS: "amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_sqlite,pdo_sqlsrv,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd"
+  # 仅 Linux / macOS 自动追加（Windows 上 pgsql 依赖 meson/python，CI 拉取 nuget 失败）
+  UNIX_EXTRA_EXTENSIONS: "pcntl,pdo_pgsql,pgsql,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid"
   # 仅 Linux 自动追加
   LINUX_EXTRA_EXTENSIONS: "inotify"
 ```
 
-> 为什么要按平台拆开：`pcntl`、`posix`、`imap`、`ldap`、`memcached`、`snmp`、`uuid`、`inotify` 等在 Windows 上不受 static-php-cli 支持，放进通用列表会让 Windows Job 直接失败。
+> 为什么要按平台拆开：`pcntl`、`posix`、`imap`、`ldap`、`memcached`、`snmp`、`uuid`、`inotify` 等在 Windows 上不受 static-php-cli 支持；`pgsql`/`pdo_pgsql` 在 Windows 编译时需要临时拉取 Python/meson（CI 环境会因 nuget 失败），因此也放到 Unix 追加列表。放进通用列表会让 Windows Job 直接失败。
 
 ### 3.3 内置全量扩展清单（默认，含 ODBC）
 
-`extensions` 参数留空时，工作流会按平台自动拼接以下三组列表（Linux 共 77 个，Windows 67 个）：
+`extensions` 参数留空时，工作流会按平台自动拼接以下三组列表（Linux 共 77 个，Windows 65 个）：
 
 **三平台通用（COMMON_EXTENSIONS）**
 
 ```
-amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_pgsql,pdo_sqlite,pdo_sqlsrv,pgsql,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd
+amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_sqlite,pdo_sqlsrv,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd
 ```
 
 **仅 Linux / macOS（UNIX_EXTRA_EXTENSIONS）**
 
 ```
-pcntl,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid
+pcntl,pdo_pgsql,pgsql,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid
 ```
 
 **仅 Linux（LINUX_EXTRA_EXTENSIONS）**
@@ -191,7 +191,7 @@ inotify
 | **字符串/编码** | ctype, mbstring, mbregex, iconv, gettext, intl | 多字节字符串、国际化 |
 | **JSON/XML** | dom, libxml, simplexml, xml, xmlreader, xmlwriter, xsl | 工作流定义文件读写、XSLT 转换 |
 | **数据/时间** | bcmath, gmp, calendar | 数值计算（bcmath/gmp 大数）、日期调度 |
-| **数据库/持久化** | pdo, pdo_mysql, mysqli, mysqlnd, pdo_sqlite, sqlite3, pdo_pgsql, pgsql, odbc, pdo_odbc, sqlsrv, pdo_sqlsrv | MySQL / SQLite / PostgreSQL / 通用 ODBC / SQL Server |
+| **数据库/持久化** | pdo, pdo_mysql, mysqli, mysqlnd, pdo_sqlite, sqlite3, pdo_pgsql(Unix), pgsql(Unix), odbc, pdo_odbc, sqlsrv, pdo_sqlsrv | MySQL / SQLite / PostgreSQL / 通用 ODBC / SQL Server |
 | **缓存/消息队列** | redis, apcu, memcached(Unix), amqp, mongodb, msgpack, igbinary | 缓存、分布式锁、消息队列、序列化 |
 | **文件/归档/压缩** | fileinfo, phar, zip, zlib, bz2, xz, zstd, lz4, brotli, rar | 工作流包打包解包、状态压缩 |
 | **网络/IO** | curl, ftp, sockets, ssh2, soap, readline, maxminddb | 远程调用、SFTP、SOAP、GeoIP |
@@ -201,6 +201,8 @@ inotify
 | **协程/服务** | swow | 长驻工作流服务（协程） |
 | **系统/CLI** | pcntl(Unix), posix(Unix), sysvmsg(Unix), sysvsem(Unix), sysvshm, shmop, inotify(Linux), session | 进程管理、信号、共享内存、文件监听 |
 | **其他** | dba, ds, tidy, yaml, uuid(Unix), ldap(Unix), imap(Unix), snmp(Unix) | 按需启用 |
+
+> Windows 版默认不含 `pgsql`/`pdo_pgsql`（编译需临时拉取 Python/meson，CI 会因 nuget 失败）。Windows 要连 PostgreSQL，可安装 psqlODBC 后走 `odbc`/`pdo_odbc`。
 
 ### 3.4 完整可用扩展速查表（static-php-cli 支持的全部扩展）
 
