@@ -153,56 +153,40 @@ amqp,apcu,bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,ffi,fileinfo,filter,ftp
 
 ```yaml
 env:
-  # 三平台（Linux / macOS / Windows）通用，含 odbc / pdo_odbc / 各类数据库驱动
-  COMMON_EXTENSIONS: "amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_sqlite,pdo_sqlsrv,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd"
-  # 仅 Linux / macOS 自动追加（Windows 上 pgsql 依赖 meson/python，CI 拉取 nuget 失败）
-  UNIX_EXTRA_EXTENSIONS: "pcntl,pdo_pgsql,pgsql,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid"
-  # 仅 Linux 自动追加
-  LINUX_EXTRA_EXTENSIONS: "inotify"
+  # 三平台（Linux / macOS / Windows）通用：原默认列表 + odbc / pdo_odbc
+  COMMON_EXTENSIONS: "bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib"
 ```
 
-> 为什么要按平台拆开：`pcntl`、`posix`、`imap`、`ldap`、`memcached`、`snmp`、`uuid`、`inotify` 等在 Windows 上不受 static-php-cli 支持；`pgsql`/`pdo_pgsql` 在 Windows 编译时需要临时拉取 Python/meson（CI 环境会因 nuget 失败），因此也放到 Unix 追加列表。放进通用列表会让 Windows Job 直接失败。
+> 为控制构建体积和失败面，默认列表只保留三平台都支持的扩展，并在原默认列表基础上加入 `odbc` / `pdo_odbc`。需要 `pgsql`、`pcntl`、`inotify` 等平台专属扩展时，在 Run workflow 的 `extensions` 参数里自行填写（或临时改 `COMMON_EXTENSIONS`）。
 
-### 3.3 内置全量扩展清单（默认，含 ODBC）
+### 3.3 内置扩展清单（默认，含 ODBC）
 
-`extensions` 参数留空时，工作流会按平台自动拼接以下三组列表（Linux 共 77 个，Windows 65 个）：
+`extensions` 参数留空时，三平台统一使用以下 45 个扩展：
 
 **三平台通用（COMMON_EXTENSIONS）**
 
 ```
-amqp,apcu,bcmath,brotli,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,gettext,gmp,iconv,igbinary,intl,libxml,lz4,maxminddb,mbregex,mbstring,msgpack,mongodb,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_sqlite,pdo_sqlsrv,phar,rar,readline,redis,session,shmop,simdjson,simplexml,soap,sockets,sodium,sqlite3,sqlsrv,ssh2,swow,sysvshm,tidy,tokenizer,xml,xmlreader,xmlwriter,xsl,xz,yaml,zip,zlib,zstd
-```
-
-**仅 Linux / macOS（UNIX_EXTRA_EXTENSIONS）**
-
-```
-pcntl,pdo_pgsql,pgsql,posix,sysvmsg,sysvsem,ldap,imap,memcached,snmp,uuid
-```
-
-**仅 Linux（LINUX_EXTRA_EXTENSIONS）**
-
-```
-inotify
+bcmath,bz2,calendar,ctype,curl,dba,dom,ds,exif,fileinfo,filter,ftp,gd,iconv,intl,libxml,mbregex,mbstring,mysqli,mysqlnd,odbc,opcache,openssl,pdo,pdo_mysql,pdo_odbc,pdo_sqlite,phar,redis,session,shmop,simplexml,soap,sockets,sodium,sqlite3,ssh2,swow,sysvshm,tokenizer,xml,xmlreader,xmlwriter,zip,zlib
 ```
 
 | 分类 | 扩展 | 说明（工作流场景用途） |
 |------|------|------------------------|
 | **核心必备** | Core, date, filter, pcre, SPL, tokenizer | PHP 默认自带，不可移除 |
-| **字符串/编码** | ctype, mbstring, mbregex, iconv, gettext, intl | 多字节字符串、国际化 |
-| **JSON/XML** | dom, libxml, simplexml, xml, xmlreader, xmlwriter, xsl | 工作流定义文件读写、XSLT 转换 |
-| **数据/时间** | bcmath, gmp, calendar | 数值计算（bcmath/gmp 大数）、日期调度 |
-| **数据库/持久化** | pdo, pdo_mysql, mysqli, mysqlnd, pdo_sqlite, sqlite3, pdo_pgsql(Unix), pgsql(Unix), odbc, pdo_odbc, sqlsrv, pdo_sqlsrv | MySQL / SQLite / PostgreSQL / 通用 ODBC / SQL Server |
-| **缓存/消息队列** | redis, apcu, memcached(Unix), amqp, mongodb, msgpack, igbinary | 缓存、分布式锁、消息队列、序列化 |
-| **文件/归档/压缩** | fileinfo, phar, zip, zlib, bz2, xz, zstd, lz4, brotli, rar | 工作流包打包解包、状态压缩 |
-| **网络/IO** | curl, ftp, sockets, ssh2, soap, readline, maxminddb | 远程调用、SFTP、SOAP、GeoIP |
+| **字符串/编码** | ctype, mbstring, mbregex, iconv, intl | 多字节字符串、国际化 |
+| **JSON/XML** | dom, libxml, simplexml, xml, xmlreader, xmlwriter | 工作流定义文件读写 |
+| **数据/时间** | bcmath, calendar | 数值计算、日期调度 |
+| **数据库/持久化** | pdo, pdo_mysql, mysqli, mysqlnd, pdo_sqlite, sqlite3, odbc, pdo_odbc | MySQL / SQLite / 通用 ODBC |
+| **缓存/消息队列** | redis | 缓存、分布式锁 |
+| **文件/归档/压缩** | fileinfo, phar, zip, zlib, bz2 | 工作流包打包解包、状态压缩 |
+| **网络/IO** | curl, ftp, sockets, ssh2, soap | 远程调用、SFTP、SOAP |
 | **图像处理** | gd, exif | 图片生成、缩略图、EXIF 读取 |
 | **安全/加密** | openssl, sodium | 签名校验、加密传输 |
-| **性能** | opcache, simdjson | 脚本加速编译执行、高性能 JSON |
+| **性能** | opcache | 脚本加速编译执行 |
 | **协程/服务** | swow | 长驻工作流服务（协程） |
-| **系统/CLI** | pcntl(Unix), posix(Unix), sysvmsg(Unix), sysvsem(Unix), sysvshm, shmop, inotify(Linux), session | 进程管理、信号、共享内存、文件监听 |
-| **其他** | dba, ds, tidy, yaml, uuid(Unix), ldap(Unix), imap(Unix), snmp(Unix) | 按需启用 |
+| **系统/CLI** | sysvshm, shmop, session | 共享内存、会话 |
+| **其他** | dba, ds | 按需启用 |
 
-> Windows 版默认不含 `pgsql`/`pdo_pgsql`（编译需临时拉取 Python/meson，CI 会因 nuget 失败）。Windows 要连 PostgreSQL，可安装 psqlODBC 后走 `odbc`/`pdo_odbc`。
+> 默认不含 `pgsql`/`pdo_pgsql`。Windows 要连 PostgreSQL，可安装 psqlODBC 后走 `odbc`/`pdo_odbc`。
 >
 > 如果构建在下载阶段报 `Failed to get GitHub release API info` / `Failed to get GitHub latest release`，说明 spc 请求 GitHub API 被限流或服务故障。工作流已在 `craft.yml` 的 `download-options.custom-url` 中把主要依赖（PHP 源码 8.4.27、openssl、curl、icu、libzip、gd 相关库、PECL 扩展等）固定为 GitHub Release / PECL / php.net 直链，绕过 `api.github.com` 与 php.net 的版本查询接口；版本号写死在 [.github/workflows/build-php.yml](.github/workflows/build-php.yml) 中，需要升级依赖时手动改链接即可。注意：`php-src` 固定为 8.4.27，若通过 `php-version` 参数编译 8.3/8.2，需要同步删除该条 `php-src` 直链。若仍有个别构件走 API，可在仓库 `Settings → Secrets and variables → Actions` 添加名为 `SPC_GITHUB_TOKEN` 的 classic PAT（勾选 `public_repo`），工作流会自动使用它。**不要用内置 `GITHUB_TOKEN`**：它只能访问当前仓库，访问其他仓库会返回 404。
 
